@@ -1,0 +1,67 @@
+name: Deploy Portfolio
+
+on:
+  push:
+    branches: [ staging ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout staging branch
+      - name: Checkout staging code
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      # 2. Setup Git user for merge
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # 3. Merge staging into main
+      - name: Merge staging into main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          git fetch origin main
+          git checkout main
+          git merge --no-ff staging -m "Auto-merge staging into main [skip ci]"
+          git push origin main
+
+      # 4. Setup SSH for deployment using custom key
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/github.id
+          chmod 600 ~/.ssh/github.id
+          ssh-keyscan -H 13.62.239.109 >> ~/.ssh/known_hosts 2>/dev/null
+
+      # 5. Deploy main branch to server
+      - name: Deploy & Restart Nginx
+        run: |
+          ssh -i ~/.ssh/github.id -o StrictHostKeyChecking=no deploy@13.62.239.109 << 'EOF'
+            set -e
+
+            echo "Deploying latest portfolio..."
+            cd /var/www/html/talal_devops_portfolio
+
+            # Pull latest main branch
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fdx
+
+            echo "Restarting Nginx..."
+            sudo systemctl restart nginx
+
+            # Verify Nginx
+            sudo systemctl is-active --quiet nginx || {
+              echo "Nginx failed!" >&2
+              exit 1
+            }
+
+            echo "Deployment successful!"
+          EOF
