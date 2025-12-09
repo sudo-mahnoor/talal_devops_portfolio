@@ -50,7 +50,7 @@ jobs:
           chmod 600 ~/.ssh/github.id
           ssh-keyscan -H 13.62.239.109 >> ~/.ssh/known_hosts
 
-      # 6. Add SSH config (THIS FIXES YOUR ISSUE)
+      # 6. Add SSH config
       - name: Setup SSH Config
         run: |
           cat <<EOF > ~/.ssh/config
@@ -67,7 +67,7 @@ jobs:
         run: |
           ssh myserver "echo 'SSH connection successful!'"
 
-      # 8. Deploy updated main branch
+      # 8. Deploy updated main branch (Option 1: use correct SSH key for Git)
       - name: Deploy & Restart Nginx
         run: |
           ssh myserver << 'EOF'
@@ -75,6 +75,10 @@ jobs:
             echo "Deploying latest portfolio..."
             cd /var/www/html/talal_devops_portfolio
 
+            # Ensure git uses the correct SSH key
+            export GIT_SSH_COMMAND="ssh -i ~/.ssh/github.id -o StrictHostKeyChecking=no"
+
+            # Update repo
             git fetch origin main
             git reset --hard origin/main
             git clean -fdx
